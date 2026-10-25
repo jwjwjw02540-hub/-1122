@@ -29,35 +29,44 @@ class FootballAnalyzer:
         self.fitted = False
         self.df = None
 
-    def load_from_penaltyblog(self, competition: str = "ENG Premier League", season: str = "2024-2025") -> None:
-        """ดึงข้อมูลจริงจาก football-data.co.uk ผ่าน penaltyblog"""
+    def load_from_penaltyblog(self, competition: str = "ENG Premier League", season: str = "2024-2025", seasons: Optional[List[str]] = None) -> None:
+        """ดึงข้อมูลจริงจาก football-data.co.uk (รองรับหลายฤดูกาล)"""
         try:
-            scraper = pb.scrapers.FootballData(competition, season)
-            fixtures = scraper.get_fixtures()
-            # ใช้คอลัมน์ที่มีอยู่
-            df = fixtures.copy()
-            if "goals_home" not in df.columns and "fthg" in df.columns:
-                df["goals_home"] = df["fthg"]
-                df["goals_away"] = df["ftag"]
-            df = df.rename(columns={
-                "team_home": "home_team",
-                "team_away": "away_team",
-                "goals_home": "home_goals",
-                "goals_away": "away_goals",
-            })
-            if "datetime" in df.columns:
-                df["date"] = pd.to_datetime(df["datetime"])
-            elif "date" in df.columns:
-                df["date"] = pd.to_datetime(df["date"])
-            # กรองเฉพาะแมตช์ที่จบแล้ว
-            df = df.dropna(subset=["home_goals", "away_goals"])
-            df["home_goals"] = pd.to_numeric(df["home_goals"], errors="coerce").fillna(0).astype(int)
-            df["away_goals"] = pd.to_numeric(df["away_goals"], errors="coerce").fillna(0).astype(int)
-            df = df[["date", "home_team", "away_team", "home_goals", "away_goals"]].reset_index(drop=True)
-            self.load_data(df)
-            print(f"โหลดข้อมูลจริงสำเร็จ: {competition} {season} ({len(df)} แมตช์)")
+            if seasons is None:
+                seasons = [season]
+            all_dfs = []
+            for s in seasons:
+                try:
+                    scraper = pb.scrapers.FootballData(competition, s)
+                    fixtures = scraper.get_fixtures()
+                    df = fixtures.copy()
+                    if "goals_home" not in df.columns and "fthg" in df.columns:
+                        df["goals_home"] = df["fthg"]
+                        df["goals_away"] = df["ftag"]
+                    df = df.rename(columns={
+                        "team_home": "home_team",
+                        "team_away": "away_team",
+                        "goals_home": "home_goals",
+                        "goals_away": "away_goals",
+                    })
+                    if "datetime" in df.columns:
+                        df["date"] = pd.to_datetime(df["datetime"])
+                    elif "date" in df.columns:
+                        df["date"] = pd.to_datetime(df["date"])
+                    df = df.dropna(subset=["home_goals", "away_goals"])
+                    df["home_goals"] = pd.to_numeric(df["home_goals"], errors="coerce").fillna(0).astype(int)
+                    df["away_goals"] = pd.to_numeric(df["away_goals"], errors="coerce").fillna(0).astype(int)
+                    df = df[["date", "home_team", "away_team", "home_goals", "away_goals"]]
+                    all_dfs.append(df)
+                except Exception:
+                    continue
+            if not all_dfs:
+                raise ValueError("ไม่พบข้อมูลฤดูกาลที่เลือก")
+            combined = pd.concat(all_dfs, ignore_index=True).sort_values("date").reset_index(drop=True)
+            self.load_data(combined)
+            print(f"โหลดข้อมูลจริงสำเร็จ: {competition} ({len(combined)} แมตช์ จาก {len(all_dfs)} ฤดูกาล)")
         except Exception as e:
-            raise ValueError(f"ดึงข้อมูลไม่สำเร็จ: {e}. ลองลีก/ฤดูกาลอื่น")
+            raise ValueError(f"ดึงข้อมูลไม่สำเร็จ: {e}")
 
     def load_data(self, df: pd.DataFrame) -> None:
         """

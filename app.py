@@ -30,16 +30,22 @@ with st.sidebar:
         help="ค่าสูง = ให้น้ำหนักเกมล่าสุดมากกว่า"
     )
 
-    st.subheader("📂 ข้อมูลจริง")
-    competition = st.selectbox(
-        "ลีก",
-        ["ENG Premier League", "ESP La Liga", "ITA Serie A", "DEU Bundesliga 1", "FRA Ligue 1"],
-        index=0
-    )
-    season = st.selectbox(
-        "ฤดูกาล",
-        ["2024-2025", "2023-2024", "2022-2023", "2021-2022"],
-        index=0
+    st.subheader("📂 ข้อมูลจริง (ทุกลีกหลัก)")
+    # รายการลีกหลักทั้งหมดจาก football-data.co.uk
+    MAJOR_LEAGUES = [
+        "ENG Premier League", "ENG Championship", "ENG League 1", "ENG League 2",
+        "ESP La Liga", "ESP La Liga Segunda",
+        "ITA Serie A", "ITA Serie B",
+        "DEU Bundesliga 1", "DEU Bundesliga 2",
+        "FRA Ligue 1", "FRA Ligue 2",
+        "NLD Eredivisie", "PRT Liga 1", "TUR Super Lig",
+        "BEL First Division A", "SCO Premier League", "GRC Super League",
+    ]
+    competition = st.selectbox("ลีก", MAJOR_LEAGUES, index=0)
+    seasons = st.multiselect(
+        "ฤดูกาล (เลือกได้หลายฤดู)",
+        ["2024-2025", "2023-2024", "2022-2023", "2021-2022", "2020-2021"],
+        default=["2024-2025", "2023-2024"]
     )
     use_real = st.checkbox("ใช้ข้อมูลจริงจาก football-data.co.uk", value=True)
     uploaded = st.file_uploader("หรืออัปโหลด CSV เอง", type=["csv"])
@@ -58,20 +64,11 @@ with st.sidebar:
                 }
                 df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
                 analyzer.load_data(df)
-            elif use_real:
-                analyzer.load_from_penaltyblog(competition, season)
+            elif use_real and seasons:
+                analyzer.load_from_penaltyblog(competition, seasons=seasons)
             else:
-                # fallback sample
-                np.random.seed(42)
-                teams = ["Arsenal", "Chelsea", "Liverpool", "Man City", "Man United"]
-                dates = pd.date_range("2023-08-01", periods=100, freq="3D")
-                data = []
-                for d in dates:
-                    h = np.random.choice(teams)
-                    a = np.random.choice([t for t in teams if t != h])
-                    data.append({"date": d, "home_team": h, "away_team": a,
-                                 "home_goals": np.random.poisson(1.5), "away_goals": np.random.poisson(1.2)})
-                analyzer.load_data(pd.DataFrame(data))
+                st.error("เลือกฤดูกาลอย่างน้อย 1 ฤดู หรืออัปโหลด CSV")
+                st.stop()
 
             analyzer.fit()
             st.session_state.analyzer = analyzer
