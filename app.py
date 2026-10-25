@@ -112,6 +112,33 @@ if st.session_state.fitted and st.session_state.analyzer:
         m3.metric("Total xG", result["xg_total"])
         m4.metric("Draw", f"{result['p_draw']*100:.1f}%")
 
+        # Historical stats
+        hist = result.get("history", {})
+        if hist:
+            st.markdown("### สถิติในอดีต")
+            h1, h2 = st.columns(2)
+
+            with h1:
+                st.markdown(f"**{home}**")
+                ho = hist.get("home_overall", {})
+                hh = hist.get("home_home", {})
+                st.write(f"ฟอร์มล่าสุด: `{ho.get('form', '-')}`")
+                st.write(f"เฉลี่ยประตู (รวม): {ho.get('gf', 0)} ยิง / {ho.get('ga', 0)} เสีย")
+                st.write(f"เมื่อเป็นเหย้า: {hh.get('gf', 0)} ยิง / {hh.get('ga', 0)} เสีย · ชนะ {hh.get('win_rate', 0)}%")
+
+            with h2:
+                st.markdown(f"**{away}**")
+                ao = hist.get("away_overall", {})
+                aa = hist.get("away_away", {})
+                st.write(f"ฟอร์มล่าสุด: `{ao.get('form', '-')}`")
+                st.write(f"เฉลี่ยประตู (รวม): {ao.get('gf', 0)} ยิง / {ao.get('ga', 0)} เสีย")
+                st.write(f"เมื่อเป็นเยือน: {aa.get('gf', 0)} ยิง / {aa.get('ga', 0)} เสีย · ชนะ {aa.get('win_rate', 0)}%")
+
+            if hist.get("h2h"):
+                st.markdown("**Head-to-Head ล่าสุด**")
+                h2h_df = pd.DataFrame(hist["h2h"])
+                st.dataframe(h2h_df, use_container_width=True, hide_index=True)
+
         # 1X2
         st.markdown("### ผลการแข่งขัน (1X2)")
         c1, c2, c3 = st.columns(3)

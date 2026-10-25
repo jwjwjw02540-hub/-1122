@@ -170,6 +170,76 @@ class FootballAnalyzer:
             "top_scores": [(h, a, round(p, 4)) for h, a, p in top],
             "over_under": ou_results,
             "asian_handicap": ah_results,
+            "history": self.get_team_history(home_team, away_team),
+        }
+
+    def get_team_history(self, home_team: str, away_team: str, last_n: int = 10) -> Dict:
+        """ดึงสถิติในอดีตของทั้งสองทีม + H2H"""
+        if self.df is None:
+            return {}
+
+        def team_stats(team: str, is_home: Optional[bool] = None, n: int = last_n) -> Dict:
+            if is_home is True:
+                matches = self.df[self.df["home_team"] == team].tail(n)
+                scored = matches["home_goals"]
+                conceded = matches["away_goals"]
+                results = np.where(matches["home_goals"] > matches["away_goals"], "W",
+                                   np.where(matches["home_goals"] < matches["away_goals"], "L", "D"))
+            elif is_home is False:
+                matches = self.df[self.df["away_team"] == team].tail(n)
+                scored = matches["away_goals"]
+                conceded = matches["home_goals"]
+                results = np.where(matches["away_goals"] > matches["home_goals"], "W",
+                                   np.where(matches["away_goals"] < matches["home_goals"], "L", "D"))
+            else:
+                home_m = self.df[self.df["home_team"] == team]
+                away_m = self.df[self.df["away_team"] == team]
+                all_m = pd.concat([
+                    home_m.assign(scored=home_m["home_goals"], conceded=home_m["away_goals"],
+                                  res=np.where(home_m["home_goals"] > home_m["away_goals"], "W",
+                                               np.where(home_m["home_goals"] < home_m["away_goals"], "L", "D"))),
+                    away_m.assign(scored=away_m["away_goals"], conceded=away_m["home_goals"],
+                                  res=np.where(away_m["away_goals"] > away_m["home_goals"], "W",
+                                               np.where(away_m["away_goals"] < away_m["home_goals"], "L", "D")))
+                ]).sort_values("date").tail(n)
+                scored = all_m["scored"]
+                conceded = all_m["conceded"]
+                results = all_m["res"].values
+
+            if len(scored) == 0:
+                return {"matches": 0, "gf": 0, "ga": 0, "form": "", "win_rate": 0}
+
+            form = "".join(results[-5:]) if len(results) >= 5 else "".join(results)
+            wins = (results == "W").sum()
+            return {
+                "matches": len(scored),
+                "gf": round(scored.mean(), 2),
+                "ga": round(conceded.mean(), 2),
+                "form": form,
+                "win_rate": round(wins / len(results) * 100, 1),
+            }
+
+        # Head-to-head
+        h2h = self.df[
+            ((self.df["home_team"] == home_team) & (self.df["away_team"] == away_team)) |
+            ((self.df["home_team"] == away_team) & (self.df["away_team"] == home_team))
+        ].sort_values("date", ascending=False).head(8)
+
+        h2h_list = []
+        for _, row in h2h.iterrows():
+            h2h_list.append({
+                "date": row["date"].strftime("%Y-%m-%d"),
+                "home": row["home_team"],
+                "away": row["away_team"],
+                "score": f"{int(row['home_goals'])}-{int(row['away_goals'])}",
+            })
+
+        return {
+            "home_overall": team_stats(home_team, None),
+            "home_home": team_stats(home_team, True),
+            "away_overall": team_stats(away_team, None),
+            "away_away": team_stats(away_team, False),
+            "h2h": h2h_list,
         }
 
     def print_analysis(self, result: Dict) -> None:
